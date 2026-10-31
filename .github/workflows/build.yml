@@ -1,3 +1,4 @@
+
 name: Build AudioFlow APK
 
 on:
@@ -25,8 +26,7 @@ jobs:
 
       - name: Install Android SDK components
         run: |
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
