@@ -14,15 +14,23 @@ import com.audioflow.model.AudioSource
 import com.audioflow.model.RoutingRule
 import com.audioflow.routing.RoutingManager
 
+private val defaultAudioSources = listOf(
+    AudioSource("preset-youtube", "YouTube", "com.google.android.youtube"),
+    AudioSource("preset-instagram", "Instagram", "com.instagram.android"),
+    AudioSource("preset-spotify", "Spotify", "com.spotify.music"),
+    AudioSource("preset-jiohotstar", "JioHotstar", "in.startv.hotstar")
+)
+
 @Composable
 fun MixerScreen() {
     val context = LocalContext.current
+    val manager = remember(context) { RoutingManager(context) }
 
-    val manager = remember(context) {
-        RoutingManager(context)
+    val sources = remember {
+        mutableStateListOf<AudioSource>().apply {
+            addAll(defaultAudioSources)
+        }
     }
-
-    val sources = remember { mutableStateListOf<AudioSource>() }
     val outputs = remember { mutableStateListOf<AudioOutput>() }
     val rules = remember { mutableStateListOf<RoutingRule>() }
 
@@ -30,12 +38,11 @@ fun MixerScreen() {
     var selectedOutputId by remember { mutableStateOf<String?>(null) }
     var showAddSourceDialog by remember { mutableStateOf(false) }
     var newSourceName by remember { mutableStateOf("") }
-    var message by remember { mutableStateOf("Ready to configure audio") }
+    var message by remember { mutableStateOf("Choose an app and an output zone") }
 
     fun refresh() {
         outputs.clear()
         outputs.addAll(manager.getAvailableOutputs())
-
         rules.clear()
         rules.addAll(manager.getAssignments())
     }
@@ -44,18 +51,16 @@ fun MixerScreen() {
         refresh()
     }
 
-    val background = Color(0xFF111722)
-
     MaterialTheme(
         colorScheme = darkColorScheme(
             primary = Color(0xFF60A5FA),
-            background = background,
+            background = Color(0xFF111722),
             surface = Color(0xFF1B2330)
         )
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = background
+            color = Color(0xFF111722)
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 LazyColumn(
@@ -67,13 +72,12 @@ fun MixerScreen() {
                 ) {
                     item {
                         Text(
-                            text = "AUDIOFLOW",
+                            "AUDIOFLOW",
                             style = MaterialTheme.typography.headlineMedium,
                             color = Color.White
                         )
-
                         Text(
-                            text = "Personal Audio Routing Console",
+                            "Personal Audio Routing Console",
                             color = Color(0xFF94A3B8)
                         )
                     }
@@ -88,34 +92,15 @@ fun MixerScreen() {
                     }
 
                     item {
-                        OutlinedButton(
-                            onClick = { showAddSourceDialog = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("+ Add audio source")
-                        }
-                    }
-
-                    item {
                         Text(
-                            "ACTIVE AUDIO SOURCES",
+                            "YOUR AUDIO APPS",
                             color = Color(0xFF60A5FA),
                             style = MaterialTheme.typography.titleMedium
                         )
-
                         Text(
-                            "Add a source manually and select its destination.",
+                            "Select an app, then choose its destination.",
                             color = Color(0xFF94A3B8)
                         )
-                    }
-
-                    if (sources.isEmpty()) {
-                        item {
-                            Text(
-                                "No sources added yet. Tap '+ Add audio source' to get started.",
-                                color = Color.LightGray
-                            )
-                        }
                     }
 
                     items(sources, key = { it.id }) { source ->
@@ -137,16 +122,23 @@ fun MixerScreen() {
                     }
 
                     item {
-                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = { showAddSourceDialog = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("+ Add another source")
+                        }
+                    }
 
+                    item {
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            "AVAILABLE OUTPUTS",
+                            "OUTPUT ZONES",
                             color = Color(0xFF4ADE80),
                             style = MaterialTheme.typography.titleMedium
                         )
-
                         Text(
-                            "Choose where the selected source should be assigned.",
+                            "Phone speaker and connected audio devices.",
                             color = Color(0xFF94A3B8)
                         )
                     }
@@ -154,7 +146,7 @@ fun MixerScreen() {
                     if (outputs.isEmpty()) {
                         item {
                             Text(
-                                "No output devices detected.",
+                                "No output zones detected.",
                                 color = Color.LightGray
                             )
                         }
@@ -173,15 +165,14 @@ fun MixerScreen() {
                                 }
 
                                 if (source == null) {
-                                    selectedOutputId = output.id
-                                    message = "Select a source first."
+                                    message = "Select an app first."
                                 } else {
                                     manager.assign(source, output)
                                     rules.clear()
                                     rules.addAll(manager.getAssignments())
-
                                     selectedOutputId = output.id
-                                    message = "${source.name} assigned to ${output.name}"
+                                    message =
+                                        "${source.name} logically assigned to ${output.name}"
                                 }
                             }
                         )
@@ -202,19 +193,15 @@ fun MixerScreen() {
                                     color = Color.White,
                                     style = MaterialTheme.typography.titleMedium
                                 )
-
                                 Text(message, color = Color(0xFF4ADE80))
-
                                 Text(
-                                    "${rules.size} routing assignment(s)",
+                                    "${rules.size} logical assignment(s)",
                                     color = Color.LightGray
                                 )
-
                                 Text(
-                                    "Note: These are logical assignments only. Android has not redirected the apps' audio.",
+                                    "Important: Android does not let this app independently redirect other apps' audio. Left and right earbuds are logical display zones, not separate physical audio routes.",
                                     color = Color(0xFFFBBF24)
                                 )
-
                                 OutlinedButton(
                                     onClick = {
                                         manager.clearAssignments()
@@ -238,9 +225,7 @@ fun MixerScreen() {
                             showAddSourceDialog = false
                             newSourceName = ""
                         },
-                        title = {
-                            Text("Add audio source")
-                        },
+                        title = { Text("Add audio source") },
                         text = {
                             OutlinedTextField(
                                 value = newSourceName,
@@ -253,23 +238,16 @@ fun MixerScreen() {
                             TextButton(
                                 onClick = {
                                     val name = newSourceName.trim()
-
                                     if (name.isNotEmpty()) {
-                                        val id = "manual-${System.currentTimeMillis()}"
-
                                         sources.add(
                                             AudioSource(
-                                                id = id,
+                                                id = "manual-${System.currentTimeMillis()}",
                                                 name = name,
-                                                packageName = "manual",
-                                                isPlaying = false,
-                                                isActive = false
+                                                packageName = "manual"
                                             )
                                         )
-
-                                        message = "$name added. Choose an output."
+                                        message = "$name added."
                                     }
-
                                     newSourceName = ""
                                     showAddSourceDialog = false
                                 }
