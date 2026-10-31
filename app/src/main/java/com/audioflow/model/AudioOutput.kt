@@ -1,8 +1,8 @@
 package com.audioflow.model
 
 enum class AudioOutputType {
-    SPEAKER,
-    WIRED,
+    PHONE_SPEAKER,
+    WIRED_HEADPHONES,
     BLUETOOTH,
     USB,
     OTHER
