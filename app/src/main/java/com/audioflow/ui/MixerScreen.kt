@@ -1,7 +1,5 @@
 package com.audioflow.ui
 
-import android.content.Intent
-import android.provider.Settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,15 +28,11 @@ fun MixerScreen() {
 
     var selectedSourceId by remember { mutableStateOf<String?>(null) }
     var selectedOutputId by remember { mutableStateOf<String?>(null) }
-    var notificationAccess by remember { mutableStateOf(false) }
+    var showAddSourceDialog by remember { mutableStateOf(false) }
+    var newSourceName by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("Ready to configure audio") }
 
     fun refresh() {
-        notificationAccess = manager.hasNotificationAccess()
-
-        sources.clear()
-        sources.addAll(manager.getActiveSources())
-
         outputs.clear()
         outputs.addAll(manager.getAvailableOutputs())
 
@@ -63,40 +57,140 @@ fun MixerScreen() {
             modifier = Modifier.fillMaxSize(),
             color = background
         ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(vertical = 24.dp)
-            ) {
-                item {
-                    Text(
-                        text = "AUDIOFLOW",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = Color.White
-                    )
+            Box(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(vertical = 24.dp)
+                ) {
+                    item {
+                        Text(
+                            text = "AUDIOFLOW",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = Color.White
+                        )
 
-                    Text(
-                        text = "Personal Audio Routing Console",
-                        color = Color(0xFF94A3B8)
-                    )
-                }
-
-                item {
-                    Button(
-                        onClick = { refresh() },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("↻ Refresh devices and apps")
+                        Text(
+                            text = "Personal Audio Routing Console",
+                            color = Color(0xFF94A3B8)
+                        )
                     }
-                }
 
-                if (!notificationAccess) {
+                    item {
+                        Button(
+                            onClick = { refresh() },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("↻ Refresh output devices")
+                        }
+                    }
+
+                    item {
+                        OutlinedButton(
+                            onClick = { showAddSourceDialog = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("+ Add audio source")
+                        }
+                    }
+
+                    item {
+                        Text(
+                            "ACTIVE AUDIO SOURCES",
+                            color = Color(0xFF60A5FA),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+
+                        Text(
+                            "Add a source manually and select its destination.",
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
+
+                    if (sources.isEmpty()) {
+                        item {
+                            Text(
+                                "No sources added yet. Tap '+ Add audio source' to get started.",
+                                color = Color.LightGray
+                            )
+                        }
+                    }
+
+                    items(sources, key = { it.id }) { source ->
+                        val assignedOutput = rules
+                            .firstOrNull { it.sourceId == source.id }
+                            ?.outputId
+                            ?.let { id -> outputs.firstOrNull { it.id == id }?.name }
+
+                        AudioSourceCard(
+                            source = source,
+                            selected = selectedSourceId == source.id,
+                            assignedOutputName = assignedOutput,
+                            onClick = {
+                                selectedSourceId = source.id
+                                selectedOutputId = null
+                                message = "${source.name} selected. Choose an output."
+                            }
+                        )
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            "AVAILABLE OUTPUTS",
+                            color = Color(0xFF4ADE80),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+
+                        Text(
+                            "Choose where the selected source should be assigned.",
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
+
+                    if (outputs.isEmpty()) {
+                        item {
+                            Text(
+                                "No output devices detected.",
+                                color = Color.LightGray
+                            )
+                        }
+                    }
+
+                    items(outputs, key = { it.id }) { output ->
+                        OutputZone(
+                            output = output,
+                            assignmentCount = rules.count {
+                                it.outputId == output.id
+                            },
+                            selected = selectedOutputId == output.id,
+                            onClick = {
+                                val source = sources.firstOrNull {
+                                    it.id == selectedSourceId
+                                }
+
+                                if (source == null) {
+                                    selectedOutputId = output.id
+                                    message = "Select a source first."
+                                } else {
+                                    manager.assign(source, output)
+                                    rules.clear()
+                                    rules.addAll(manager.getAssignments())
+
+                                    selectedOutputId = output.id
+                                    message = "${source.name} assigned to ${output.name}"
+                                }
+                            }
+                        )
+                    }
+
                     item {
                         Card(
                             colors = CardDefaults.cardColors(
-                                containerColor = Color(0xFF49351B)
+                                containerColor = Color(0xFF202633)
                             )
                         ) {
                             Column(
@@ -104,174 +198,96 @@ fun MixerScreen() {
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text(
-                                    "Notification access required",
-                                    color = Color.White
+                                    "ROUTING STATUS",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+
+                                Text(message, color = Color(0xFF4ADE80))
+
+                                Text(
+                                    "${rules.size} routing assignment(s)",
+                                    color = Color.LightGray
                                 )
 
                                 Text(
-                                    "Allow AudioFlow to access media sessions " +
-                                        "to discover supported active media apps.",
-                                    color = Color(0xFFE5D5B8)
+                                    "Note: These are logical assignments only. Android has not redirected the apps' audio.",
+                                    color = Color(0xFFFBBF24)
                                 )
 
-                                Button(
+                                OutlinedButton(
                                     onClick = {
-                                        context.startActivity(
-                                            Intent(
-                                                Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS
-                                            )
-                                        )
-                                    }
+                                        manager.clearAssignments()
+                                        rules.clear()
+                                        selectedSourceId = null
+                                        selectedOutputId = null
+                                        message = "All assignments cleared."
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text("Grant access")
+                                    Text("Clear all assignments")
                                 }
                             }
                         }
                     }
                 }
 
-                item {
-                    Text(
-                        "ACTIVE AUDIO SOURCES",
-                        color = Color(0xFF60A5FA),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-
-                    Text(
-                        "Select an app to choose its destination.",
-                        color = Color(0xFF94A3B8)
-                    )
-                }
-
-                if (sources.isEmpty()) {
-                    item {
-                        Text(
-                            if (notificationAccess)
-                                "No active media sessions found. Start playback " +
-                                    "in a supported app and refresh."
-                            else
-                                "Grant notification access to discover media sessions.",
-                            color = Color.LightGray
-                        )
-                    }
-                }
-
-                items(sources, key = { it.id }) { source ->
-                    val assignedOutput = rules
-                        .firstOrNull { it.sourceId == source.id }
-                        ?.outputId
-                        ?.let { id -> outputs.firstOrNull { it.id == id }?.name }
-
-                    AudioSourceCard(
-                        source = source,
-                        selected = selectedSourceId == source.id,
-                        assignedOutputName = assignedOutput,
-                        onClick = {
-                            selectedSourceId = source.id
-                            selectedOutputId = null
-                            message = "${source.name} selected. Choose an output."
-                        }
-                    )
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        "AVAILABLE OUTPUTS",
-                        color = Color(0xFF4ADE80),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-
-                    Text(
-                        "Choose where the selected app should be assigned.",
-                        color = Color(0xFF94A3B8)
-                    )
-                }
-
-                if (outputs.isEmpty()) {
-                    item {
-                        Text(
-                            "No output devices detected.",
-                            color = Color.LightGray
-                        )
-                    }
-                }
-
-                items(outputs, key = { it.id }) { output ->
-                    OutputZone(
-                        output = output,
-                        assignmentCount = rules.count {
-                            it.outputId == output.id
+                if (showAddSourceDialog) {
+                    AlertDialog(
+                        onDismissRequest = {
+                            showAddSourceDialog = false
+                            newSourceName = ""
                         },
-                        selected = selectedOutputId == output.id,
-                        onClick = {
-                            val source = sources.firstOrNull {
-                                it.id == selectedSourceId
+                        title = {
+                            Text("Add audio source")
+                        },
+                        text = {
+                            OutlinedTextField(
+                                value = newSourceName,
+                                onValueChange = { newSourceName = it },
+                                label = { Text("App or source name") },
+                                singleLine = true
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    val name = newSourceName.trim()
+
+                                    if (name.isNotEmpty()) {
+                                        val id = "manual-${System.currentTimeMillis()}"
+
+                                        sources.add(
+                                            AudioSource(
+                                                id = id,
+                                                name = name,
+                                                packageName = "manual",
+                                                isPlaying = false,
+                                                isActive = false
+                                            )
+                                        )
+
+                                        message = "$name added. Choose an output."
+                                    }
+
+                                    newSourceName = ""
+                                    showAddSourceDialog = false
+                                }
+                            ) {
+                                Text("Add")
                             }
-
-                            if (source == null) {
-                                selectedOutputId = output.id
-                                message = "Select an app first."
-                            } else {
-                                manager.assign(source, output)
-                                rules.clear()
-                                rules.addAll(manager.getAssignments())
-
-                                selectedOutputId = output.id
-                                message =
-                                    "${source.name} assigned to ${output.name}"
+                        },
+                        dismissButton = {
+                            TextButton(
+                                onClick = {
+                                    showAddSourceDialog = false
+                                    newSourceName = ""
+                                }
+                            ) {
+                                Text("Cancel")
                             }
                         }
                     )
-                }
-
-                item {
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color(0xFF202633)
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                "ROUTING STATUS",
-                                color = Color.White,
-                                style = MaterialTheme.typography.titleMedium
-                            )
-
-                            Text(
-                                message,
-                                color = Color(0xFF4ADE80)
-                            )
-
-                            Text(
-                                "${rules.size} routing assignment(s)",
-                                color = Color.LightGray
-                            )
-
-                            Text(
-                                "Note: These are logical assignments only. " +
-                                    "Android has not redirected the apps' audio.",
-                                color = Color(0xFFFBBF24)
-                            )
-
-                            OutlinedButton(
-                                onClick = {
-                                    manager.clearAssignments()
-                                    rules.clear()
-                                    selectedSourceId = null
-                                    selectedOutputId = null
-                                    message = "All assignments cleared."
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Clear all assignments")
-                            }
-                        }
-                    }
                 }
             }
         }

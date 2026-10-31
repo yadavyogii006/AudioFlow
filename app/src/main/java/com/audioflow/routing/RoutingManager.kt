@@ -15,14 +15,6 @@ class RoutingManager(context: Context) {
         return discovery.getAvailableOutputs()
     }
 
-    fun getActiveSources(): List<AudioSource> {
-        return discovery.getActiveAudioSources()
-    }
-
-    fun hasNotificationAccess(): Boolean {
-        return discovery.hasNotificationAccess()
-    }
-
     fun assign(
         source: AudioSource,
         output: AudioOutput
